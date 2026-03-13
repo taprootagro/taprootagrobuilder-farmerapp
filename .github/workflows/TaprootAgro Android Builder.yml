@@ -71,6 +71,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
+    # ── Node.js 24 opt-in for GitHub Actions runtime ──
+    # GitHub is deprecating Node.js 20 for JS-based actions (setup-node, setup-java, upload-artifact, etc.)
+    # Deadline: 2026-06-02. This env var opts in early so we can verify compatibility now.
+    # Note: This is the ACTION RUNNER's Node.js, NOT the project build Node.js (still 20 via setup-node).
+    # TODO: When actions/setup-node@v5, actions/setup-java@v5, actions/upload-artifact@v5 are
+    #       confirmed stable, upgrade the `uses:` lines and remove this env var.
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
       # ════════════════════════════════════════════════
       # 第 1 步：拉取客户的 PWA 源码
@@ -319,7 +328,8 @@ jobs:
                 presentationOptions: ['badge', 'sound', 'alert'],
               },
               Keyboard: {
-                resize: 'body',
+                resize: 'none',  // 不让 WebView resize，保持 innerHeight 不变
+                                 // 让 visualViewport 独立缩小，配合 useKeyboardVisible 检测
                 resizeOnFullScreen: true,
               },
               LocalNotifications: {
@@ -590,19 +600,24 @@ jobs:
             # 通过检查仓库是否有之前的 artifact 来判断（简单方案：用 run_number）
             if [ "${{ github.run_number }}" -gt 1 ]; then
               echo ""
-              echo "╔══════════════════════════════════════════════════════════════════════╗"
-              echo "║  ⚠️  警告：这不是首次构建，但未检测到 Keystore Secret！              ║"
-              echo "║                                                                      ║"
-              echo "║  如果你之前已经构建过并分发了 APK，这次生成的新 Keystore              ║"
-              echo "║  签名不同，用户必须卸载旧版才能安装新版！                             ║"
-              echo "║                                                                      ║"
-              echo "║  如果这是你第一次成功构建，请忽略此警告。                             ║"
-              echo "║                                                                      ║"
-              echo "║  📖 如何保存 Keystore：                                              ║"
-              echo "║     下载上次构建的 keystore-info.txt，按说明添加 2 个 Secret：        ║"
-              echo "║     • KEYSTORE_BASE64                                                ║"
-              echo "║     • KEYSTORE_PASS                                                  ║"
-              echo "╚══════════════════════════════════════════════════════════════════════╝"
+              echo "╔════════════════════════════════════════════════════════════════════════════════╗"
+              echo "║  ⚠️  WARNING: Not the first build, but no Keystore Secret detected!           ║"
+              echo "║  ⚠️  警告：这不是首次构建，但未检测到 Keystore Secret！                       ║"
+              echo "║                                                                                ║"
+              echo "║  EN: If you previously built & distributed an APK, the new keystore will       ║"
+              echo "║      have a DIFFERENT signature — users must UNINSTALL old version first!      ║"
+              echo "║  CN: 如果你之前已构建并分发了 APK，新 Keystore 签名不同，                     ║"
+              echo "║      用户必须卸载旧版才能安装新版！                                           ║"
+              echo "║                                                                                ║"
+              echo "║  If this is your first successful build, ignore this warning.                   ║"
+              echo "║  如果这是你第一次成功构建，请忽略此警告。                                     ║"
+              echo "║                                                                                ║"
+              echo "║  📖 How to save / 如何保存 Keystore：                                         ║"
+              echo "║     Download keystore-info.txt from the last build Artifact, then add:         ║"
+              echo "║     下载上次构建 Artifact 里的 keystore-info.txt，然后添加 2 个 Secret：      ║"
+              echo "║     • KEYSTORE_BASE64                                                          ║"
+              echo "║     • KEYSTORE_PASS                                                            ║"
+              echo "╚═══════════════════════════════════════════════════════════════════════════════╝"
               echo ""
             fi
 
@@ -624,45 +639,52 @@ jobs:
           echo "ks_alias=$KS_ALIAS" >> $GITHUB_OUTPUT
           echo "is_new=$IS_NEW" >> $GITHUB_OUTPUT
 
-          # ���果是新生成的，创建信息文件
+          # 果是新生成的，创建信息文件
           if [ "$IS_NEW" = "true" ]; then
             KS_BASE64=$(base64 -w 0 "$KS_FILE")
 
             cat > /tmp/keystore-info.txt << INFOEOF
-            ╔══════════════════════════════════════════════════════════════╗
-            ║              🔑 KEYSTORE 信息 — 请妥善保存！                ║
-            ╠══════════════════════════════════════════════════════════════╣
-            ║                                                            ║
+            ╔══════════════════════════════════════════════════════════════════════╗
+            ║           🔑 KEYSTORE INFO — SAVE THIS FILE SECURELY!              ║
+            ║           🔑 签名密钥信息 — 请妥善保存此文件！                     ║
+            ╠══════════════════════════════════════════════════════════════════════╣
+            ║                                                                      ║
             ║  App Name:     ${{ inputs.app_name }}
             ║  Package ID:   ${{ inputs.app_id }}
             ║  Key Alias:    $KS_ALIAS
             ║  Password:     $KS_PASS
             ║  Generated:    $(date -u '+%Y-%m-%d %H:%M UTC')
             ║  Validity:     10000 days (~27 years)
-            ║                                                            ║
-            ╠══════════════════════════════════════════════════════════════╣
-            ║                                                            ║
-            ║  ⚠️  重要：丢失 Keystore = 永远无法更新此 App               ║
-            ║                                                            ║
-            ║  后续打包要保持同一签名，请在本仓库添加 2 个 Secret：        ║
-            ║                                                            ║
-            ║  Settings → Secrets and variables → Actions → New secret    ║
-            ║                                                            ║
-            ║  Secret 1:                                                  ║
-            ║    Name:  KEYSTORE_BASE64                                   ║
-            ║    Value: （见下方 base64 编码）                             ║
-            ║                                                            ║
-            ║  Secret 2:                                                  ║
-            ║    Name:  KEYSTORE_PASS                                     ║
+            ║                                                                      ║
+            ╠══════════════════════════════════════════════════════════════════════╣
+            ║                                                                      ║
+            ║  ⚠️  CRITICAL: Lost keystore = can NEVER update this app!            ║
+            ║  ⚠️  重要提示：丢失 Keystore = 永远无法更新此 App！                 ║
+            ║                                                                      ║
+            ╠══════════════════════════════════════════════════════════════════════╣
+            ║                                                                      ║
+            ║  To keep the same signing key for future builds, add 2 Secrets       ║
+            ║  to your builder repository:                                         ║
+            ║  为了后续打包保持同一签名，请在打包器仓库添加 2 个 Secret：          ║
+            ║                                                                      ║
+            ║  📍 Settings → Secrets and variables → Actions → New secret          ║
+            ║                                                                      ║
+            ║  Secret 1:                                                           ║
+            ║    Name:  KEYSTORE_BASE64                                            ║
+            ║    Value: (see base64 string below / 见下方 base64 编码)             ║
+            ║                                                                      ║
+            ║  Secret 2:                                                           ║
+            ║    Name:  KEYSTORE_PASS                                              ║
             ║    Value: $KS_PASS
-            ║                                                            ║
-            ╚══════════════════════════════════════════════════════════════╝
+            ║                                                                      ║
+            ╚══════════════════════════════════════════════════════════════════════╝
 
+            ═══ KEYSTORE_BASE64 value (copy the entire line below) ═══
             ═══ KEYSTORE_BASE64 的值（复制下面这整行）═══
 
             $KS_BASE64
 
-            ═══ 结束 ═══
+            ═══ END / 结束 ═══
           INFOEOF
 
             echo "✅ New keystore generated. Info saved to artifact."
