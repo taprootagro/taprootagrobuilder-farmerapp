@@ -9,8 +9,8 @@
 #   4. 约 8-12 分钟后下载 APK
 #
 # 输入说明：
-#   app_name  → App 显示名称（如 "丰收助手"）
-#   app_id    → 安卓包名（如 com.harvest.helper）
+#   app_name  → App 显示名称（如 "taprootagro"）
+#   app_id    → 安卓包名（如 com.taprootagrofarmer.app）
 #   pwa_repo  → 你的 PWA 源码仓库地址（如 https://github.com/yourname/your-pwa）
 #
 # 此工作流会：
