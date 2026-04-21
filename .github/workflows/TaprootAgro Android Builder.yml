@@ -380,6 +380,17 @@ jobs:
           echo "   Patching Gradle wrapper → 8.12 ..."
           sed -i 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.12-all.zip|' android/gradle/wrapper/gradle-wrapper.properties
 
+          # ── minSdk ≥ 24（@capacitor-community/barcode-scanner → io.ionic.libs:ioncamera-android 要求 API 24+）──
+          echo "   Patching minSdkVersion → 24 ..."
+          if [ -f android/variables.gradle ]; then
+            sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 24/' android/variables.gradle
+          fi
+          if [ -f android/build.gradle ]; then
+            sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 24/' android/build.gradle
+          fi
+          sed -i 's/minSdk [0-9][0-9]*/minSdk 24/' android/app/build.gradle
+          sed -i 's/minSdkVersion [0-9][0-9]*/minSdkVersion 24/' android/app/build.gradle
+
           # ── 调试：显示修改后的文件内容 ──
           echo ""
           echo "=== android/build.gradle (after patch) ==="
@@ -392,7 +403,7 @@ jobs:
           cat android/gradle/wrapper/gradle-wrapper.properties
 
           echo ""
-          echo "✅ Capacitor Android project initialized (AGP 8.9.1 + compileSdk 36 + Gradle 8.12)"
+          echo "✅ Capacitor Android project initialized (AGP 8.9.1 + compileSdk 36 + minSdk 24 + Gradle 8.12)"
 
       # ════════════════════════════════════════════════
       # 第 5 步：处理图标（512px → 安卓全尺寸 + 自适应图标）
@@ -527,8 +538,7 @@ jobs:
           # 使用 sed 在 </manifest> 之前插入
           sed -i '/<\/manifest>/i \
               \n\
-              <!-- ═══ 网络（必须） ═══ -->\n\
-              <uses-permission android:name="android.permission.INTERNET" />\n\
+              <!-- ═══ 网络：INTERNET 已由 Capacitor 主模板声明，此处仅补充 ACCESS_NETWORK_STATE（避免 merger 报 INTERNET 重复） ═══ -->\n\
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n\
               \n\
               <!-- ═══ 相机（拍照识别病虫害、扫码） ═══ -->\n\
